@@ -41,6 +41,9 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
     <style>
         /* Styles sp&#233;cifiques au widget */
         #map {
@@ -111,6 +114,18 @@
         .popup-content p {
             margin: 0.25rem 0;
             font-size: 0.875rem;
+        }
+
+        .chart-container {
+            background: var(--background-default-grey);
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-default-grey);
+            margin-top: 1.5rem;
+        }
+
+        #chart-types {
+            max-height: 300px;
         }
 
         @media (max-width: 768px) {
@@ -281,6 +296,16 @@
                 </div>
             </div>
         </div>
+
+        <!-- Graphique par type de lieu -->
+        <div class="fr-grid-row fr-mt-4w">
+            <div class="fr-col-12">
+                <div class="chart-container">
+                    <h4 class="fr-h6 fr-mb-2w">R&#233;partition par type de lieu</h4>
+                    <canvas id="chart-types"></canvas>
+                </div>
+            </div>
+        </div>
     </div>
     </main>
 
@@ -317,6 +342,17 @@
         let map;
         let markers = [];
         let allData = [];
+        let typesChart = null;
+
+        // Labels pour les types de lieu
+        const TYPE_LABELS = {
+            'RP': 'R&#233;sidence Principale',
+            'RS': 'R&#233;sidence Secondaire',
+            'Commerce': 'Commerce',
+            'Local Associatif': 'Local Associatif',
+            'Societe': 'Soci&#233;t&#233;',
+            'Autres': 'Autres'
+        };
 
         // Initialisation de la carte
         function initMap() {
@@ -488,6 +524,119 @@
                 const group = L.featureGroup(markers);
                 map.fitBounds(group.getBounds().pad(0.1));
             }
+
+            // Mettre &#224; jour le graphique
+            updateChart();
+        }
+
+        // Mise &#224; jour du graphique par type de lieu
+        function updateChart() {
+            const dateDebut = dateToTimestamp(document.getElementById('date-debut').value);
+            const dateFin = dateToTimestamp(document.getElementById('date-fin').value);
+            const creneauHoraire = document.getElementById('creneau-horaire').value;
+
+            // Filtrer les donn&#233;es (sans le filtre type de lieu)
+            let chartData = allData.filter(record => {
+                const fields = record.fields;
+
+                // V&#233;rifier les coordonn&#233;es valides
+                const lat = parseFloat(fields.Lat);
+                const lng = parseFloat(fields.Long);
+                if (isNaN(lat) || isNaN(lng)) return false;
+
+                // Filtre par date de d&#233;but
+                if (dateDebut && fields.Date_Faits_Debut) {
+                    if (fields.Date_Faits_Debut < dateDebut) return false;
+                }
+
+                // Filtre par date de fin
+                if (dateFin && fields.Date_Faits_Debut) {
+                    if (fields.Date_Faits_Debut > dateFin) return false;
+                }
+
+                // Filtre par cr&#233;neau horaire
+                if (creneauHoraire && fields.Creneaux_Faits !== creneauHoraire) {
+                    return false;
+                }
+
+                return true;
+            });
+
+            // Compter par type
+            const typeCounts = {};
+            Object.keys(TYPE_COLORS).forEach(type => {
+                typeCounts[type] = 0;
+            });
+
+            chartData.forEach(record => {
+                const type = record.fields.Type || 'Autres';
+                if (typeCounts.hasOwnProperty(type)) {
+                    typeCounts[type]++;
+                } else {
+                    typeCounts['Autres']++;
+                }
+            });
+
+            // Pr&#233;parer les donn&#233;es pour Chart.js
+            const labels = Object.keys(TYPE_COLORS).map(type => TYPE_LABELS[type] || type);
+            const data = Object.keys(TYPE_COLORS).map(type => typeCounts[type]);
+            const colors = Object.values(TYPE_COLORS);
+
+            // D&#233;truire l'ancien graphique s'il existe
+            if (typesChart) {
+                typesChart.destroy();
+            }
+
+            // Cr&#233;er le nouveau graphique
+            const ctx = document.getElementById('chart-types').getContext('2d');
+            typesChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Nombre de cambriolages',
+                        data: data,
+                        backgroundColor: colors,
+                        borderColor: colors,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.parsed.y + ' fait(s)';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1,
+                                precision: 0
+                            },
+                            title: {
+                                display: true,
+                                text: 'Nombre de faits'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Type de lieu'
+                            }
+                        }
+                    }
+                }
+            });
         }
 
         // R&#233;initialisation des filtres
