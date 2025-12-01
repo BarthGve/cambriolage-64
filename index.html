@@ -209,24 +209,30 @@
                                         Choisissez un th&#232;me pour personnaliser l'apparence du site.
                                     </legend>
                                     <div class="fr-fieldset__element">
-                                        <div class="fr-radio-group">
+                                        <div class="fr-radio-group fr-radio-rich">
                                             <input value="light" type="radio" id="fr-radios-theme-light" name="fr-radios-theme">
                                             <label class="fr-label" for="fr-radios-theme-light">Th&#232;me clair</label>
+                                            <div class="fr-radio-rich__pictogram" id="pictogram-light" data-pictogram-url="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14/dist/artwork/pictograms/environment/sun.svg">
+                                            </div>
                                         </div>
                                     </div>
                                     <div class="fr-fieldset__element">
-                                        <div class="fr-radio-group">
+                                        <div class="fr-radio-group fr-radio-rich">
                                             <input value="dark" type="radio" id="fr-radios-theme-dark" name="fr-radios-theme">
                                             <label class="fr-label" for="fr-radios-theme-dark">Th&#232;me sombre</label>
+                                            <div class="fr-radio-rich__pictogram" id="pictogram-dark" data-pictogram-url="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14/dist/artwork/pictograms/environment/moon.svg">
+                                            </div>
                                         </div>
                                     </div>
                                     <div class="fr-fieldset__element">
-                                        <div class="fr-radio-group">
+                                        <div class="fr-radio-group fr-radio-rich">
                                             <input value="system" type="radio" id="fr-radios-theme-system" name="fr-radios-theme">
                                             <label class="fr-label" for="fr-radios-theme-system">
                                                 Syst&#232;me
                                                 <span class="fr-hint-text">Utilise les param&#232;tres syst&#232;me</span>
                                             </label>
+                                            <div class="fr-radio-rich__pictogram" id="pictogram-system" data-pictogram-url="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14/dist/artwork/pictograms/system/system.svg">
+                                            </div>
                                         </div>
                                     </div>
                                 </fieldset>
@@ -393,7 +399,79 @@
     <script type="module" src="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14/dist/dsfr/dsfr.module.min.js"></script>
 
     <script>
+        // ============================================
+        // PICTOGRAM INJECTION (contourne CORS pour le dark mode)
+        // ============================================
+        const pictogramCache = {};
+        let pictogramCounter = 0;
+
+        async function fetchAndInjectPictogram(url, container) {
+            try {
+                const uniqueId = `picto-${++pictogramCounter}`;
+
+                let svgContent;
+                if (pictogramCache[url]) {
+                    svgContent = pictogramCache[url];
+                } else {
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    svgContent = await response.text();
+                    pictogramCache[url] = svgContent;
+                }
+
+                const parser = new DOMParser();
+                const svgDoc = parser.parseFromString(svgContent, 'image/svg+xml');
+                const symbols = svgDoc.querySelectorAll('symbol');
+
+                if (symbols.length > 0) {
+                    const symbolsHtml = Array.from(symbols).map(s => {
+                        let html = s.outerHTML;
+                        html = html.replace(/id="artwork-decorative"/g, `id="${uniqueId}-decorative"`);
+                        html = html.replace(/id="artwork-minor"/g, `id="${uniqueId}-minor"`);
+                        html = html.replace(/id="artwork-major"/g, `id="${uniqueId}-major"`);
+                        return html;
+                    }).join('');
+
+                    const artworkHtml = `
+                        <svg aria-hidden="true" class="fr-artwork" viewBox="0 0 80 80" width="80px" height="80px">
+                            <defs>${symbolsHtml}</defs>
+                            <use class="fr-artwork-decorative" href="#${uniqueId}-decorative"></use>
+                            <use class="fr-artwork-minor" href="#${uniqueId}-minor"></use>
+                            <use class="fr-artwork-major" href="#${uniqueId}-major"></use>
+                        </svg>
+                    `;
+                    container.innerHTML = artworkHtml;
+                } else {
+                    container.innerHTML = svgContent;
+                    const svg = container.querySelector('svg');
+                    if (svg) {
+                        svg.setAttribute('width', '80px');
+                        svg.setAttribute('height', '80px');
+                        svg.classList.add('fr-artwork');
+                    }
+                }
+            } catch (error) {
+                console.error('Erreur chargement pictogramme:', url, error);
+                container.innerHTML = '<span class="fr-icon-theme-fill" style="font-size: 2rem;"></span>';
+            }
+        }
+
+        function loadDisplayPictograms() {
+            const containers = document.querySelectorAll('[data-pictogram-url]');
+            containers.forEach(container => {
+                const url = container.getAttribute('data-pictogram-url');
+                if (url) {
+                    fetchAndInjectPictogram(url, container);
+                }
+            });
+        }
+
+        // Charger les pictogrammes au demarrage
+        document.addEventListener('DOMContentLoaded', loadDisplayPictograms);
+
+        // ============================================
         // Configuration
+        // ============================================
         const TABLE_ID = 'Donnees_Saisies';
 
         // Détection du mode (widget Grist ou standalone)
