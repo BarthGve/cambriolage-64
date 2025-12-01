@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="system" data-fr-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#000091">
+    <title>Cartographie des Cambriolages - Pyr&#233;n&#233;es-Atlantiques</title>
+
+    <!-- Script de gestion du th&#232;me DSFR (AVANT CSS) -->
+    <script>
+        (function () {
+            const scheme = localStorage.getItem("fr-scheme") || "system";
+            document.documentElement.setAttribute("data-fr-scheme", scheme);
+            if (scheme === "system") {
+                const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+                document.documentElement.setAttribute("data-fr-theme", prefersDark ? "dark" : "light");
+                window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
+                    document.documentElement.setAttribute("data-fr-theme", e.matches ? "dark" : "light");
+                });
+            }
+        })();
+    </script>
+
+    <!-- DSFR CSS - Ordre CRITIQUE -->
+    <link href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14/dist/core/core.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14/dist/utility/utility.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14/dist/utility/icons/icons.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14/dist/scheme/scheme.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14/dist/component/logo/logo.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14/dist/component/header/header.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14/dist/component/button/button.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14/dist/component/input/input.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14/dist/component/select/select.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14/dist/component/checkbox/checkbox.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14/dist/component/badge/badge.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14/dist/component/alert/alert.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14/dist/component/card/card.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14/dist/component/tag/tag.min.css" rel="stylesheet">
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+
+    <style>
+        /* Styles sp&#233;cifiques au widget */
+        #map {
+            height: 500px;
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid var(--border-default-grey);
+        }
+
+        .filters-container {
+            background-color: var(--background-alt-grey);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+        }
+
+        .stats-container {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .stat-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Couleurs des marqueurs par type */
+        .marker-rp { background-color: #E00A17; }
+        .marker-rs { background-color: #e66100; }
+        .marker-commerce { background-color: #157AFB; }
+        .marker-local { background-color: #6A6AF4; }
+        .marker-societe { background-color: #009081; }
+        .marker-autres { background-color: #666666; }
+
+        .legend {
+            background: var(--background-default-grey);
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-default-grey);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .leaflet-popup-content-wrapper {
+            border-radius: 8px;
+        }
+
+        .popup-content h4 {
+            margin: 0 0 0.5rem 0;
+            color: var(--text-title-grey);
+        }
+
+        .popup-content p {
+            margin: 0.25rem 0;
+            font-size: 0.875rem;
+        }
+
+        @media (max-width: 768px) {
+            #map {
+                height: 400px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header DSFR -->
+    <header role="banner" class="fr-header">
+        <div class="fr-header__body">
+            <div class="fr-container">
+                <div class="fr-header__body-row">
+                    <div class="fr-header__brand fr-enlarge-link">
+                        <div class="fr-header__brand-top">
+                            <div class="fr-header__logo">
+                                <p class="fr-logo">
+                                    Minist&#232;re
+                                    <br>de l'int&#233;rieur
+                                </p>
+                            </div>
+                            <div class="fr-header__operator">
+                                <img src="https://i.postimg.cc/gcLghfS7/ac183b2f-1ed8-4184-bf6e-492cf358fbae-removebg-preview.png" alt="Gendarmerie nationale" width="75" height="75" style="max-width: 5rem;">
+                            </div>
+                        </div>
+                        <div class="fr-header__service">
+                            <a href="/" title="Accueil - Cartographie des Cambriolages - Minist&#232;re de l'int&#233;rieur">
+                                <p class="fr-header__service-title">Cartographie des Cambriolages</p>
+                            </a>
+                            <p class="fr-header__service-tagline">Pyr&#233;n&#233;es-Atlantiques (64)</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main role="main" id="content">
+    <div class="fr-container fr-py-4w">
+
+        <!-- Alerte de chargement -->
+        <div id="loading-alert" class="fr-alert fr-alert--info fr-mb-2w">
+            <p class="fr-alert__title">Chargement des donn&#233;es...</p>
+        </div>
+
+        <!-- Alerte d'erreur (masqu&#233;e par d&#233;faut) -->
+        <div id="error-alert" class="fr-alert fr-alert--error fr-mb-2w" style="display: none;">
+            <p class="fr-alert__title">Erreur de chargement</p>
+            <p id="error-message"></p>
+        </div>
+
+        <!-- Statistiques -->
+        <div class="stats-container fr-mb-2w">
+            <div class="stat-badge">
+                <span class="fr-badge fr-badge--blue-france" id="total-count">0</span>
+                <span>faits affich&#233;s</span>
+            </div>
+            <div class="stat-badge">
+                <span class="fr-badge fr-badge--green-emeraude" id="filtered-count">0</span>
+                <span>apr&#232;s filtrage</span>
+            </div>
+        </div>
+
+        <!-- Filtres -->
+        <div class="filters-container">
+            <div class="fr-grid-row fr-grid-row--gutters">
+                <!-- Filtre par dates -->
+                <div class="fr-col-12 fr-col-md-6 fr-col-lg-3">
+                    <div class="fr-input-group">
+                        <label class="fr-label" for="date-debut">Date de d&#233;but</label>
+                        <input class="fr-input" type="date" id="date-debut" name="date-debut">
+                    </div>
+                </div>
+                <div class="fr-col-12 fr-col-md-6 fr-col-lg-3">
+                    <div class="fr-input-group">
+                        <label class="fr-label" for="date-fin">Date de fin</label>
+                        <input class="fr-input" type="date" id="date-fin" name="date-fin">
+                    </div>
+                </div>
+
+                <!-- Filtre par cr&#233;neau horaire -->
+                <div class="fr-col-12 fr-col-md-6 fr-col-lg-3">
+                    <div class="fr-select-group">
+                        <label class="fr-label" for="creneau-horaire">
+                            Cr&#233;neau horaire
+                        </label>
+                        <select class="fr-select" id="creneau-horaire" name="creneau-horaire">
+                            <option value="">Tous les cr&#233;neaux</option>
+                            <option value="00h00 - 06h00">00h00 - 06h00</option>
+                            <option value="06h00 - 12h00">06h00 - 12h00</option>
+                            <option value="12h00 - 18h00">12h00 - 18h00</option>
+                            <option value="18h00 - 24h00">18h00 - 24h00</option>
+                            <option value="24h00 (-)">24h00 (-)</option>
+                            <option value="3 jours (-)">3 jours (-)</option>
+                            <option value="3 jours (+)">3 jours (+)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Filtre par type de lieu -->
+                <div class="fr-col-12 fr-col-md-6 fr-col-lg-3">
+                    <div class="fr-select-group">
+                        <label class="fr-label" for="type-lieu">
+                            Type de lieu
+                        </label>
+                        <select class="fr-select" id="type-lieu" name="type-lieu">
+                            <option value="">Tous les types</option>
+                            <option value="RP">R&#233;sidence Principale (RP)</option>
+                            <option value="RS">R&#233;sidence Secondaire (RS)</option>
+                            <option value="Commerce">Commerce</option>
+                            <option value="Local Associatif">Local Associatif</option>
+                            <option value="Societe">Soci&#233;t&#233;</option>
+                            <option value="Autres">Autres</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Boutons d'action -->
+            <div class="fr-grid-row fr-mt-2w">
+                <div class="fr-col-12">
+                    <div class="fr-btns-group fr-btns-group--inline-sm">
+                        <button class="fr-btn fr-btn--secondary fr-btn--sm" type="button" id="btn-reset">
+                            R&#233;initialiser les filtres
+                        </button>
+                        <button class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm" type="button" id="btn-refresh">
+                            Actualiser les donn&#233;es
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Carte et l&#233;gende -->
+        <div class="fr-grid-row fr-grid-row--gutters">
+            <div class="fr-col-12 fr-col-lg-9">
+                <div id="map"></div>
+            </div>
+            <div class="fr-col-12 fr-col-lg-3">
+                <div class="legend">
+                    <h4 class="fr-h6 fr-mb-2w">L&#233;gende</h4>
+                    <div class="legend-item">
+                        <span class="legend-color marker-rp"></span>
+                        <span>R&#233;sidence Principale</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color marker-rs"></span>
+                        <span>R&#233;sidence Secondaire</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color marker-commerce"></span>
+                        <span>Commerce</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color marker-local"></span>
+                        <span>Local Associatif</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color marker-societe"></span>
+                        <span>Soci&#233;t&#233;</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color marker-autres"></span>
+                        <span>Autres</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </main>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <!-- DSFR JS -->
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14/dist/dsfr/dsfr.module.min.js"></script>
+    <script nomodule src="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14/dist/dsfr/dsfr.nomodule.min.js"></script>
+
+    <script>
+        // Configuration Grist
+        const GRIST_CONFIG = {
+            apiHost: 'https://grist.numerique.gouv.fr/api',
+            apiKey: 'c2e1553e4f09f0d811d28d5a227c4eb1ef268a31',
+            docId: '34CfoTR18Y4b',
+            tableId: 'Donnees_Saisies'
+        };
+
+        // Couleurs par type de lieu
+        const TYPE_COLORS = {
+            'RP': '#E00A17',
+            'RS': '#e66100',
+            'Commerce': '#157AFB',
+            'Local Associatif': '#6A6AF4',
+            'Societe': '#009081',
+            'Autres': '#666666'
+        };
+
+        // Variables globales
+        let map;
+        let markers = [];
+        let allData = [];
+
+        // Initialisation de la carte
+        function initMap() {
+            // Centre sur les Pyr&#233;n&#233;es-Atlantiques
+            map = L.map('map').setView([43.3, -0.8], 9);
+
+            // Tuiles OpenStreetMap
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&#169; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            }).addTo(map);
+        }
+
+        // Cr&#233;ation d'une ic&#244;ne de marqueur color&#233;e
+        function createMarkerIcon(type) {
+            const color = TYPE_COLORS[type] || TYPE_COLORS['Autres'];
+            return L.divIcon({
+                className: 'custom-marker',
+                html: `<svg width="24" height="36" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 0C5.4 0 0 5.4 0 12c0 7.2 12 24 12 24s12-16.8 12-24C24 5.4 18.6 0 12 0z" fill="${color}"/>
+                    <circle cx="12" cy="12" r="6" fill="white"/>
+                </svg>`,
+                iconSize: [24, 36],
+                iconAnchor: [12, 36],
+                popupAnchor: [0, -36]
+            });
+        }
+
+        // Formatage de la date Unix timestamp vers DD/MM/YYYY
+        function formatDate(timestamp) {
+            if (!timestamp) return 'Non renseign&#233;';
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleDateString('fr-FR');
+        }
+
+        // Conversion date string vers timestamp
+        function dateToTimestamp(dateStr) {
+            if (!dateStr) return null;
+            const date = new Date(dateStr);
+            return Math.floor(date.getTime() / 1000);
+        }
+
+        // Cr&#233;ation du contenu popup
+        function createPopupContent(record) {
+            const fields = record.fields;
+            return `
+                <div class="popup-content">
+                    <h4>${fields.Type || 'Type inconnu'}</h4>
+                    <p><strong>Adresse :</strong> ${fields.Adresse_Faits || fields.Adresse || 'Non renseign&#233;e'}</p>
+                    <p><strong>Date des faits :</strong> ${formatDate(fields.Date_Faits_Debut)}</p>
+                    <p><strong>Cr&#233;neau :</strong> ${fields.Creneaux_Faits || 'Non renseign&#233;'}</p>
+                    ${fields.UTC ? `<p><strong>UTC :</strong> ${fields.UTC}</p>` : ''}
+                    ${fields.Compagnie ? `<p><strong>Compagnie :</strong> ${fields.Compagnie}</p>` : ''}
+                </div>
+            `;
+        }
+
+        // Chargement des donn&#233;es depuis Grist
+        async function loadData() {
+            const loadingAlert = document.getElementById('loading-alert');
+            const errorAlert = document.getElementById('error-alert');
+            const errorMessage = document.getElementById('error-message');
+
+            loadingAlert.style.display = 'block';
+            errorAlert.style.display = 'none';
+
+            try {
+                const response = await fetch(
+                    `${GRIST_CONFIG.apiHost}/docs/${GRIST_CONFIG.docId}/tables/${GRIST_CONFIG.tableId}/records`,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${GRIST_CONFIG.apiKey}`,
+                            'Content-Type': 'application/json'
+                        }
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error(`Erreur HTTP: ${response.status}`);
+                }
+
+                const data = await response.json();
+                allData = data.records || [];
+
+                loadingAlert.style.display = 'none';
+                document.getElementById('total-count').textContent = allData.length;
+
+                applyFilters();
+
+            } catch (error) {
+                console.error('Erreur de chargement:', error);
+                loadingAlert.style.display = 'none';
+                errorAlert.style.display = 'block';
+                errorMessage.textContent = error.message;
+            }
+        }
+
+        // Effacement des marqueurs
+        function clearMarkers() {
+            markers.forEach(marker => map.removeLayer(marker));
+            markers = [];
+        }
+
+        // Application des filtres et affichage des marqueurs
+        function applyFilters() {
+            const dateDebut = dateToTimestamp(document.getElementById('date-debut').value);
+            const dateFin = dateToTimestamp(document.getElementById('date-fin').value);
+            const creneauHoraire = document.getElementById('creneau-horaire').value;
+            const typeLieu = document.getElementById('type-lieu').value;
+
+            clearMarkers();
+
+            let filteredData = allData.filter(record => {
+                const fields = record.fields;
+
+                // V&#233;rifier les coordonn&#233;es valides
+                const lat = parseFloat(fields.Lat);
+                const lng = parseFloat(fields.Long);
+                if (isNaN(lat) || isNaN(lng)) return false;
+
+                // Filtre par date de d&#233;but
+                if (dateDebut && fields.Date_Faits_Debut) {
+                    if (fields.Date_Faits_Debut < dateDebut) return false;
+                }
+
+                // Filtre par date de fin
+                if (dateFin && fields.Date_Faits_Debut) {
+                    if (fields.Date_Faits_Debut > dateFin) return false;
+                }
+
+                // Filtre par cr&#233;neau horaire
+                if (creneauHoraire && fields.Creneaux_Faits !== creneauHoraire) {
+                    return false;
+                }
+
+                // Filtre par type de lieu
+                if (typeLieu && fields.Type !== typeLieu) {
+                    return false;
+                }
+
+                return true;
+            });
+
+            // Cr&#233;ation des marqueurs
+            filteredData.forEach(record => {
+                const fields = record.fields;
+                const lat = parseFloat(fields.Lat);
+                const lng = parseFloat(fields.Long);
+
+                const marker = L.marker([lat, lng], {
+                    icon: createMarkerIcon(fields.Type)
+                }).addTo(map);
+
+                marker.bindPopup(createPopupContent(record));
+                markers.push(marker);
+            });
+
+            // Mise &#224; jour du compteur
+            document.getElementById('filtered-count').textContent = filteredData.length;
+
+            // Ajuster la vue si des marqueurs sont pr&#233;sents
+            if (markers.length > 0) {
+                const group = L.featureGroup(markers);
+                map.fitBounds(group.getBounds().pad(0.1));
+            }
+        }
+
+        // R&#233;initialisation des filtres
+        function resetFilters() {
+            document.getElementById('date-debut').value = '';
+            document.getElementById('date-fin').value = '';
+            document.getElementById('creneau-horaire').value = '';
+            document.getElementById('type-lieu').value = '';
+            applyFilters();
+        }
+
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', function() {
+            initMap();
+            loadData();
+
+            // &#201;couteurs d'&#233;v&#233;nements pour les filtres
+            document.getElementById('date-debut').addEventListener('change', applyFilters);
+            document.getElementById('date-fin').addEventListener('change', applyFilters);
+            document.getElementById('creneau-horaire').addEventListener('change', applyFilters);
+            document.getElementById('type-lieu').addEventListener('change', applyFilters);
+
+            // Boutons
+            document.getElementById('btn-reset').addEventListener('click', resetFilters);
+            document.getElementById('btn-refresh').addEventListener('click', loadData);
+        });
+    </script>
+</body>
+</html>
