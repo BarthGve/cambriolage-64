@@ -96,8 +96,23 @@
             display: inline-block;
         }
 
+        /* Popups Leaflet compatibles mode sombre DSFR */
         .leaflet-popup-content-wrapper {
             border-radius: 8px;
+            background-color: var(--background-default-grey);
+            color: var(--text-default-grey);
+        }
+
+        .leaflet-popup-tip {
+            background-color: var(--background-default-grey);
+        }
+
+        .leaflet-popup-close-button {
+            color: var(--text-action-high-grey) !important;
+        }
+
+        .leaflet-popup-close-button:hover {
+            color: var(--text-action-high-blue-france) !important;
         }
 
         .popup-content h4 {
@@ -108,6 +123,11 @@
         .popup-content p {
             margin: 0.25rem 0;
             font-size: 0.875rem;
+            color: var(--text-default-grey);
+        }
+
+        .popup-content strong {
+            color: var(--text-label-grey);
         }
 
         .chart-container {
