@@ -458,16 +458,63 @@
 
         function loadDisplayPictograms() {
             const containers = document.querySelectorAll('[data-pictogram-url]');
+            const promises = [];
             containers.forEach(container => {
                 const url = container.getAttribute('data-pictogram-url');
                 if (url) {
-                    fetchAndInjectPictogram(url, container);
+                    promises.push(fetchAndInjectPictogram(url, container));
+                }
+            });
+            // Réinitialiser DSFR après injection des pictogrammes
+            Promise.all(promises).then(() => {
+                if (window.dsfr) {
+                    window.dsfr.start();
                 }
             });
         }
 
-        // Charger les pictogrammes au demarrage
-        document.addEventListener('DOMContentLoaded', loadDisplayPictograms);
+        // Synchroniser le radio avec le thème actuel
+        function syncThemeRadio() {
+            const currentScheme = localStorage.getItem('scheme') ||
+                                  document.documentElement.getAttribute('data-fr-scheme') ||
+                                  'system';
+            const radio = document.getElementById(`fr-radios-theme-${currentScheme}`);
+            if (radio) {
+                radio.checked = true;
+            }
+        }
+
+        // Appliquer le thème manuellement (fallback si DSFR ne fonctionne pas)
+        function applyTheme(scheme) {
+            localStorage.setItem('scheme', scheme);
+            document.documentElement.setAttribute('data-fr-scheme', scheme);
+
+            if (scheme === 'system') {
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                document.documentElement.setAttribute('data-fr-theme', prefersDark ? 'dark' : 'light');
+            } else {
+                document.documentElement.setAttribute('data-fr-theme', scheme);
+            }
+        }
+
+        // Écouter les changements de radio (fallback)
+        function setupThemeListeners() {
+            const radios = document.querySelectorAll('input[name="fr-radios-theme"]');
+            radios.forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        applyTheme(e.target.value);
+                    }
+                });
+            });
+        }
+
+        // Charger les pictogrammes et synchroniser au demarrage
+        document.addEventListener('DOMContentLoaded', () => {
+            loadDisplayPictograms();
+            syncThemeRadio();
+            setupThemeListeners();
+        });
 
         // ============================================
         // Configuration
